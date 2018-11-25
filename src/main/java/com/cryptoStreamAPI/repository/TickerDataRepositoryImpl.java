@@ -2,7 +2,15 @@ package com.cryptoStreamAPI.repository;
 
 import com.cryptoStreamAPI.common.DateTimeUtil;
 import com.cryptoStreamAPI.entity.TickerData;
-import org.elasticsearch.index.query.*;
+import org.elasticsearch.index.query.MatchPhraseQueryBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.index.query.RangeQueryBuilder;
+import org.elasticsearch.search.aggregations.AggregationBuilders;
+import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.sum.SumAggregationBuilder;
+import org.elasticsearch.search.aggregations.pipeline.PipelineAggregatorBuilders;
+import org.elasticsearch.search.aggregations.pipeline.movavg.MovAvgPipelineAggregationBuilder;
 import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
@@ -98,6 +106,23 @@ public class TickerDataRepositoryImpl implements TickerDataRepositoryCustom {
                 .build();
 
         return elasticsearchTemplate.queryForList(build, TickerData.class);
+    }
+
+
+    public void getMovingAverageDataForRange(){
+
+        SumAggregationBuilder sum = AggregationBuilders.sum("my_sum")
+                .field("amount_field");
+
+        MovAvgPipelineAggregationBuilder mavg = PipelineAggregatorBuilders.movingAvg("my_mov_avg", "my_sum");
+
+        DateHistogramAggregationBuilder histo = AggregationBuilders.dateHistogram("histo")
+                .field("date_field")
+                .subAggregation(sum)
+                .subAggregation(mavg);
+
+        
+
     }
 
 
