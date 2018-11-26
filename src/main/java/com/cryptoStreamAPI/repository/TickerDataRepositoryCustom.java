@@ -16,6 +16,7 @@ public interface TickerDataRepositoryCustom {
 
     public List<TickerData> getTickerDataByDateRange(LocalDateTime fromDate,LocalDateTime toDate);
 
+    public void getMovingAverageDataForRange();
 
 
 }

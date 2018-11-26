@@ -98,6 +98,21 @@ public class TickerDataQueryController {
     }
 
     /**
+     *  Extracts all tickerData entities for a date-range recorded in elasticSearch
+     *
+     *  HTTPCode: 200 (Success) / 500 (Internal Server Error)
+     *
+     * @return all TickerData entities recorded in elasticSearch
+     */
+    @RequestMapping(path="histogram", method = RequestMethod.GET)
+    public ResponseEntity<Boolean> getHistogram()  {
+
+        tickerDataQueryService.getMovingAverageDataForRange();
+
+        return  ResponseEntity.ok(true) ;
+    }
+
+    /**
      *  Extracts all tickerData entities from coinBase-API
      *
      *  HTTPCode: 200 (Success) / 500 (Internal Server Error)

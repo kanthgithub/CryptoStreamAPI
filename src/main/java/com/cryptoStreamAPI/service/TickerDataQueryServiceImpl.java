@@ -49,5 +49,10 @@ public class TickerDataQueryServiceImpl implements TickerDataQueryService{
         return tickerDataRepository.getTickerDataByDateRange(fromDate,toDate);
     }
 
+    @Override
+    public void getMovingAverageDataForRange() {
+        tickerDataRepository.getMovingAverageDataForRange();
+    }
+
 
 }

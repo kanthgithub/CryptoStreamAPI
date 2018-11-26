@@ -18,7 +18,8 @@ public interface TickerDataQueryService {
 
     public List<TickerData> getTickerDataByDate(LocalDateTime date) ;
 
-    public List<TickerData> getTickerDataByDateRange(LocalDateTime fromDate,LocalDateTime toDate) ;
+    public List<TickerData> getTickerDataByDateRange(LocalDateTime fromDate, LocalDateTime toDate) ;
 
+    public void getMovingAverageDataForRange();
 
 }

@@ -2,15 +2,20 @@ package com.cryptoStreamAPI.repository;
 
 import com.cryptoStreamAPI.common.DateTimeUtil;
 import com.cryptoStreamAPI.entity.TickerData;
+import org.elasticsearch.action.search.SearchRequestBuilder;
+import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.index.query.MatchPhraseQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.query.RangeQueryBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.stats.InternalStats;
 import org.elasticsearch.search.aggregations.metrics.sum.SumAggregationBuilder;
+import org.elasticsearch.search.aggregations.pipeline.BucketHelpers;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregatorBuilders;
 import org.elasticsearch.search.aggregations.pipeline.movavg.MovAvgPipelineAggregationBuilder;
+import org.elasticsearch.search.aggregations.pipeline.movavg.models.HoltWintersModel;
 import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
@@ -35,6 +40,48 @@ public class TickerDataRepositoryImpl implements TickerDataRepositoryCustom {
     public static final MatchPhraseQueryBuilder QUERY_BUILDER_CURRENCY = QueryBuilders.matchPhraseQuery("currency", CURRENCY);
     public static final RangeQueryBuilder QUERY_BUILDER_RANGE_TICKER_TIME_IN_EPOCH = QueryBuilders.rangeQuery("tickerTimeInEpochMillis");
 
+    private static final String INTERVAL_FIELD = "l_value";
+    private static final String VALUE_FIELD = "v_value";
+    private static final String GAP_FIELD = "g_value";
+
+    static HoltWintersModel.SeasonalityType seasonalityType;
+    static BucketHelpers.GapPolicy gapPolicy;
+
+    static int interval;
+    static int numBuckets;
+    static int windowSize;
+    static double alpha;
+    static double beta;
+    static double gamma;
+    static int period;
+
+    enum MovAvgType {
+        SIMPLE ("simple"), LINEAR("linear"), EWMA("ewma"), HOLT("holt"), HOLT_WINTERS("holt_winters"), HOLT_BIG_MINIMIZE("holt");
+
+        private final String name;
+
+        MovAvgType(String s) {
+            name = s;
+        }
+
+        public String toString(){
+            return name;
+        }
+    }
+
+    enum MetricTarget {
+        VALUE ("value"), COUNT("count"), METRIC("metric");
+
+        private final String name;
+
+        MetricTarget(String s) {
+            name = s;
+        }
+
+        public String toString(){
+            return name;
+        }
+    }
 
     Logger log = LoggerFactory.getLogger(TickerDataRepositoryImpl.class);
 
@@ -108,23 +155,71 @@ public class TickerDataRepositoryImpl implements TickerDataRepositoryCustom {
         return elasticsearchTemplate.queryForList(build, TickerData.class);
     }
 
-
+    @Override
     public void getMovingAverageDataForRange(){
 
+        SearchRequestBuilder searchRequestBuilder =
+                elasticsearchTemplate.getClient().prepareSearch("tickerdatasnapshot")
+                        .addAggregation(AggregationBuilders.stats("sum_of_price").field("price"));
+
+        SearchResponse searchResponse = searchRequestBuilder.execute().actionGet();
+
+        if(searchResponse!=null) {
+            log.info("metaData: {}", searchResponse);
+            log.info("aggregation map: {}",searchResponse.getAggregations().getAsMap().get("sum_of_price"));
+
+            log.info("aggregation metaData: {}", searchResponse.getAggregations().getAsMap().get("sum_of_price").getMetaData());
+            log.info("aggregation type: {}", searchResponse.getAggregations().getAsMap().get("sum_of_price").getType());
+            log.info("aggregation name: {}", searchResponse.getAggregations().getAsMap().get("sum_of_price").getName());
+            log.info("aggregation class: {}", searchResponse.getAggregations().getAsMap().get("sum_of_price").getClass());
+            log.info("aggregation name: {}", searchResponse.getAggregations().getAsMap().get("sum_of_price").getName());
+
+            InternalStats internalStats =
+                    (InternalStats)   searchResponse.getAggregations().getAsMap().get("sum_of_price");
+
+            log.info("sum: {}",internalStats.getSum());
+
+            log.info("average:  {}",internalStats.getAvg());
+
+
+        }
+
+        /*SearchResponse response = elasticsearchTemplate.getClient()
+                .prepareSearch("tickerdatasnapshot").setTypes("type")
+                .addAggregation(
+                        histogram("histo").field(INTERVAL_FIELD).interval(interval)
+                                .extendedBounds(0L, (long) (interval * (numBuckets - 1)))
+                                .subAggregation(movingAvg("movavg_counts","_count")
+                                        .window(windowSize)
+                                        .modelBuilder(new LinearModel.LinearModelBuilder())
+                                        .gapPolicy(gapPolicy)
+                                        .setBucketsPaths("_count"))
+                                .subAggregation(PipelineAggregatorBuilders.movingAvg("movavg_values","_count")
+                                        .window(windowSize)
+                                        .modelBuilder(new LinearModel.LinearModelBuilder())
+                                        .gapPolicy(gapPolicy)
+                                        .setBucketsPaths("the_metric"))
+                ).execute().actionGet();*/
+
         SumAggregationBuilder sum = AggregationBuilders.sum("my_sum")
-                .field("amount_field");
+                .field("price");
 
         MovAvgPipelineAggregationBuilder mavg = PipelineAggregatorBuilders.movingAvg("my_mov_avg", "my_sum");
 
         DateHistogramAggregationBuilder histo = AggregationBuilders.dateHistogram("histo")
-                .field("date_field")
+                .field("tickerTime")
                 .subAggregation(sum)
                 .subAggregation(mavg);
 
-        
+        SearchRequestBuilder searchRequestBuilder1 = elasticsearchTemplate.getClient().prepareSearch("tickerdatasnapshot").addAggregation(histo);
+        SearchResponse searchResponse1 = searchRequestBuilder1.execute().actionGet();
 
+
+        if(searchResponse1!=null) {
+            log.info("metaData1: {}", searchResponse1);
+
+        }
     }
-
 
     /**
      *
@@ -152,7 +247,7 @@ public class TickerDataRepositoryImpl implements TickerDataRepositoryCustom {
         Long pastDateInEpochMillis = getTimeStampInEpochMillis(pastDate);
 
         return QueryBuilders.boolQuery()
-                            .must(QUERY_BUILDER_RANGE_TICKER_TIME_IN_EPOCH.gte(pastDateInEpochMillis))
-                            .must(QUERY_BUILDER_RANGE_TICKER_TIME_IN_EPOCH.lte(currentDateInEpochMillis));
+                .must(QUERY_BUILDER_RANGE_TICKER_TIME_IN_EPOCH.gte(pastDateInEpochMillis))
+                .must(QUERY_BUILDER_RANGE_TICKER_TIME_IN_EPOCH.lte(currentDateInEpochMillis));
     }
 }
