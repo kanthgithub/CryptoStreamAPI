@@ -48,7 +48,9 @@ public class ElasticSearchConfig {
                 .put("client.transport.ignore_cluster_name", true)
                .put("cluster.name",esClusterName)
                .put("http.enabled", true)
-                .build();
+               .put("client.transport.ping_timeout", "60s")
+               .put("transport.tcp.connect_timeout", "60s")
+               .build();
 
         TransportClient client = new PreBuiltTransportClient(esSettings)
                 .addTransportAddress(new InetSocketTransportAddress(InetAddress.getByName(esHost), esPort));

@@ -2,17 +2,22 @@ package com.cryptoStreamAPI.repository;
 
 import com.cryptoStreamAPI.common.DateTimeUtil;
 import com.cryptoStreamAPI.entity.TickerData;
+import com.cryptoStreamAPI.model.MovingAverageModel;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.index.query.MatchPhraseQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.query.RangeQueryBuilder;
+import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
+import org.elasticsearch.search.aggregations.InternalAggregations;
 import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.stats.InternalStats;
+import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramInterval;
+import org.elasticsearch.search.aggregations.bucket.histogram.InternalDateHistogram;
 import org.elasticsearch.search.aggregations.metrics.sum.SumAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.BucketHelpers;
+import org.elasticsearch.search.aggregations.pipeline.InternalSimpleValue;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregatorBuilders;
 import org.elasticsearch.search.aggregations.pipeline.movavg.MovAvgPipelineAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.movavg.models.HoltWintersModel;
@@ -27,8 +32,13 @@ import org.springframework.data.elasticsearch.core.query.NativeSearchQuery;
 import org.springframework.data.elasticsearch.core.query.NativeSearchQueryBuilder;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static com.cryptoStreamAPI.common.DateTimeUtil.getTimeStampInEpochMillis;
 
@@ -156,69 +166,77 @@ public class TickerDataRepositoryImpl implements TickerDataRepositoryCustom {
     }
 
     @Override
-    public void getMovingAverageDataForRange(){
+    public List<MovingAverageModel> getMovingAverageDataForRange(LocalDateTime fromDate, LocalDateTime toDate,int dayRangeRollover){
 
-        SearchRequestBuilder searchRequestBuilder =
-                elasticsearchTemplate.getClient().prepareSearch("tickerdatasnapshot")
-                        .addAggregation(AggregationBuilders.stats("sum_of_price").field("price"));
-
-        SearchResponse searchResponse = searchRequestBuilder.execute().actionGet();
-
-        if(searchResponse!=null) {
-            log.info("metaData: {}", searchResponse);
-            log.info("aggregation map: {}",searchResponse.getAggregations().getAsMap().get("sum_of_price"));
-
-            log.info("aggregation metaData: {}", searchResponse.getAggregations().getAsMap().get("sum_of_price").getMetaData());
-            log.info("aggregation type: {}", searchResponse.getAggregations().getAsMap().get("sum_of_price").getType());
-            log.info("aggregation name: {}", searchResponse.getAggregations().getAsMap().get("sum_of_price").getName());
-            log.info("aggregation class: {}", searchResponse.getAggregations().getAsMap().get("sum_of_price").getClass());
-            log.info("aggregation name: {}", searchResponse.getAggregations().getAsMap().get("sum_of_price").getName());
-
-            InternalStats internalStats =
-                    (InternalStats)   searchResponse.getAggregations().getAsMap().get("sum_of_price");
-
-            log.info("sum: {}",internalStats.getSum());
-
-            log.info("average:  {}",internalStats.getAvg());
-
-
-        }
-
-        /*SearchResponse response = elasticsearchTemplate.getClient()
-                .prepareSearch("tickerdatasnapshot").setTypes("type")
-                .addAggregation(
-                        histogram("histo").field(INTERVAL_FIELD).interval(interval)
-                                .extendedBounds(0L, (long) (interval * (numBuckets - 1)))
-                                .subAggregation(movingAvg("movavg_counts","_count")
-                                        .window(windowSize)
-                                        .modelBuilder(new LinearModel.LinearModelBuilder())
-                                        .gapPolicy(gapPolicy)
-                                        .setBucketsPaths("_count"))
-                                .subAggregation(PipelineAggregatorBuilders.movingAvg("movavg_values","_count")
-                                        .window(windowSize)
-                                        .modelBuilder(new LinearModel.LinearModelBuilder())
-                                        .gapPolicy(gapPolicy)
-                                        .setBucketsPaths("the_metric"))
-                ).execute().actionGet();*/
-
-        SumAggregationBuilder sum = AggregationBuilders.sum("my_sum")
-                .field("price");
+        SumAggregationBuilder sum = AggregationBuilders.sum("my_sum").field("price");
 
         MovAvgPipelineAggregationBuilder mavg = PipelineAggregatorBuilders.movingAvg("my_mov_avg", "my_sum");
 
         DateHistogramAggregationBuilder histo = AggregationBuilders.dateHistogram("histo")
-                .field("tickerTime")
+                .field("tickerTime").dateHistogramInterval(DateHistogramInterval.days(dayRangeRollover))
                 .subAggregation(sum)
                 .subAggregation(mavg);
 
-        SearchRequestBuilder searchRequestBuilder1 = elasticsearchTemplate.getClient().prepareSearch("tickerdatasnapshot").addAggregation(histo);
-        SearchResponse searchResponse1 = searchRequestBuilder1.execute().actionGet();
 
+        Long fromDateInEpochMillis = getTimeStampInEpochMillis(fromDate);
 
-        if(searchResponse1!=null) {
-            log.info("metaData1: {}", searchResponse1);
+        Long toDateInEpochMillis = getTimeStampInEpochMillis(toDate);
+
+        QueryBuilder qb = QueryBuilders.boolQuery()
+                .must(QUERY_BUILDER_BASE)
+                .must(QUERY_BUILDER_CURRENCY)
+                .must(QUERY_BUILDER_RANGE_TICKER_TIME_IN_EPOCH.gte(fromDateInEpochMillis))
+                .must(QUERY_BUILDER_RANGE_TICKER_TIME_IN_EPOCH.lte(toDateInEpochMillis));
+
+        SearchRequestBuilder searchRequestBuilder = elasticsearchTemplate.getClient()
+                .prepareSearch("tickerdatasnapshot")
+                .addSort(SORT_BUILDER_TICKER_TIME_DESC)
+                .setQuery(qb)
+                .addAggregation(histo);
+
+        SearchResponse searchResponse = searchRequestBuilder.execute().actionGet();
+
+        List<MovingAverageModel> movingAverageModels = new ArrayList<>();
+
+        if(searchResponse!=null) {
+
+            InternalDateHistogram aggregation = (InternalDateHistogram) searchResponse.getAggregations().getAsMap().get("histo");
+
+            movingAverageModels = aggregation.getBuckets().stream().map(new Function<InternalDateHistogram.Bucket, MovingAverageModel>() {
+                @Override
+                public MovingAverageModel apply(InternalDateHistogram.Bucket bucket) {
+                    log.info("bucket Aggregation: {}",bucket.getAggregations());
+
+                   InternalAggregations internalAggregations = (InternalAggregations) bucket.getAggregations();
+
+                    String dateString = bucket.getKeyAsString();
+
+                   LocalDateTime date = DateTimeUtil.parseStringAsLocalDateTime("yyyy-MM-dd'T'HH:mm:ss",dateString);
+
+                   MovingAverageModel movingAverageModel = new MovingAverageModel();
+
+                    movingAverageModel.setDayInterval(dayRangeRollover);
+                    movingAverageModel.setTickerDate(date);
+
+                    Map<String, Aggregation> internalAggregationAsMap = internalAggregations.getAsMap();
+
+                    if(internalAggregationAsMap.containsKey("my_mov_avg")){
+
+                        InternalSimpleValue internalSimpleValue =
+                        (InternalSimpleValue) internalAggregationAsMap.get("my_mov_avg");
+
+                        BigDecimal movingAverage = BigDecimal.valueOf(internalSimpleValue.getValue()).setScale(4,BigDecimal.ROUND_HALF_UP);
+
+                        movingAverageModel.setMovingAveragePx(movingAverage);
+                    }
+
+                    return  movingAverageModel;
+                }
+            }).collect(Collectors.toList());
 
         }
+
+       return movingAverageModels;
     }
 
     /**

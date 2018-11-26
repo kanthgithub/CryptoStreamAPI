@@ -65,5 +65,20 @@ public class DateTimeUtil {
         return dtf.format(dateArgument);
     }
 
+    /**
+     *
+     * @param format
+     * @param dateString
+     * @return LocalDateTime
+     */
+    public static LocalDateTime parseStringAsLocalDateTime(String format,String dateString){
+
+        String formatArgument = format!=null ? format : "yyyy-MM-dd'T'HH:mm:ss";
+
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern(formatArgument);
+
+        return LocalDateTime.from(dtf.parse(dateString));
+    }
+
 
 }

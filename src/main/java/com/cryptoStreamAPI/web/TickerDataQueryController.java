@@ -3,6 +3,7 @@ package com.cryptoStreamAPI.web;
 
 import com.cryptoStreamAPI.entity.TickerData;
 import com.cryptoStreamAPI.model.HistoricDataModelWrapper;
+import com.cryptoStreamAPI.model.MovingAverageModel;
 import com.cryptoStreamAPI.service.TickerDataQueryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -104,12 +105,17 @@ public class TickerDataQueryController {
      *
      * @return all TickerData entities recorded in elasticSearch
      */
-    @RequestMapping(path="histogram", method = RequestMethod.GET)
-    public ResponseEntity<Boolean> getHistogram()  {
+    @RequestMapping(path="movingAverage/{fromDate}/{toDate}/{dayRollover}", method = RequestMethod.GET)
+    public ResponseEntity<List<MovingAverageModel> > getMovingAverageWithDateRange(@PathVariable("fromDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+                                                                             LocalDateTime fromDate,
+                                                                 @PathVariable("toDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+                                                                             LocalDateTime toDate,
+                                                                 @PathVariable("dayRollover")
+                                                                             String dayRollover)  {
 
-        tickerDataQueryService.getMovingAverageDataForRange();
+        List<MovingAverageModel> movingAverageModels = tickerDataQueryService.getMovingAverageDataForRange(fromDate,toDate,Integer.valueOf(dayRollover));
 
-        return  ResponseEntity.ok(true) ;
+        return  ResponseEntity.ok(movingAverageModels) ;
     }
 
     /**

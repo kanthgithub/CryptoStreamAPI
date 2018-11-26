@@ -1,6 +1,7 @@
 package com.cryptoStreamAPI.repository;
 
 import com.cryptoStreamAPI.entity.TickerData;
+import com.cryptoStreamAPI.model.MovingAverageModel;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -16,7 +17,7 @@ public interface TickerDataRepositoryCustom {
 
     public List<TickerData> getTickerDataByDateRange(LocalDateTime fromDate,LocalDateTime toDate);
 
-    public void getMovingAverageDataForRange();
+    public List<MovingAverageModel> getMovingAverageDataForRange(LocalDateTime fromDate, LocalDateTime toDate, int dayRangeRollover);
 
 
 }

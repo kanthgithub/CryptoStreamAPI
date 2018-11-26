@@ -2,6 +2,7 @@ package com.cryptoStreamAPI.service;
 
 import com.cryptoStreamAPI.entity.TickerData;
 import com.cryptoStreamAPI.model.HistoricDataModelWrapper;
+import com.cryptoStreamAPI.model.MovingAverageModel;
 import com.cryptoStreamAPI.repository.TickerDataRepository;
 import com.google.common.collect.Lists;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,8 +51,8 @@ public class TickerDataQueryServiceImpl implements TickerDataQueryService{
     }
 
     @Override
-    public void getMovingAverageDataForRange() {
-        tickerDataRepository.getMovingAverageDataForRange();
+    public List<MovingAverageModel>  getMovingAverageDataForRange(LocalDateTime fromDate, LocalDateTime toDate, int dayRangeRollover) {
+       return tickerDataRepository.getMovingAverageDataForRange( fromDate,  toDate, dayRangeRollover);
     }
 
 
