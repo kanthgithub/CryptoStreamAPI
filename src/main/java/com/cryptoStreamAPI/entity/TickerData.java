@@ -48,9 +48,6 @@ public class TickerData {
             format = DateFormat.custom, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime tickerTime;
 
-    @Field(type= FieldType.Long)
-    private Long tickerTimeInEpochMillis;
-
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern ="yyyy-MM-dd'T'HH:mm:ss")
     @JsonDeserialize(using = LocalDateTimeDeserializer.class)

@@ -3,6 +3,9 @@ package com.cryptoStreamAPI.configuration;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import io.searchbox.client.JestClient;
+import io.searchbox.client.JestClientFactory;
+import io.searchbox.client.config.HttpClientConfig;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.settings.Settings;
@@ -58,6 +61,8 @@ public class ElasticSearchConfig {
 
     }
 
+
+
     @Bean
     public ElasticsearchOperations elasticsearchTemplate() throws Exception {
         log.info("elasticsearchTemplate building initiated");
@@ -67,6 +72,25 @@ public class ElasticSearchConfig {
         log.info("elasticsearchTemplate build completed");
 
         return elasticsearchTemplate;
+    }
+
+
+    @Bean
+    public JestClient jestClient(){
+
+       /* JestClientFactory factory = new JestClientFactory();
+        final String serverUri = "http://" + esHost + ":" + esPort;
+        factory.setHttpClientConfig(new HttpClientConfig.Builder(serverUri)
+                .multiThreaded(true).maxTotalConnection(10)
+                .build());*/
+
+        final String serverUri = "http://" + esHost + ":9200" ;
+
+        HttpClientConfig httpClientConfig = new HttpClientConfig.Builder(serverUri).addServer(serverUri).multiThreaded(true).discoveryEnabled(true).build();
+
+        JestClientFactory factory = new JestClientFactory();
+        factory.setHttpClientConfig(httpClientConfig);
+        return  factory.getObject();
     }
 
     public static class CustomEntityMapper implements EntityMapper {

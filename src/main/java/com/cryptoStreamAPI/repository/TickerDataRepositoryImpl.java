@@ -3,6 +3,7 @@ package com.cryptoStreamAPI.repository;
 import com.cryptoStreamAPI.common.DateTimeUtil;
 import com.cryptoStreamAPI.entity.TickerData;
 import com.cryptoStreamAPI.model.MovingAverageModel;
+import io.searchbox.client.JestClient;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.index.query.MatchPhraseQueryBuilder;
@@ -96,12 +97,15 @@ public class TickerDataRepositoryImpl implements TickerDataRepositoryCustom {
     Logger log = LoggerFactory.getLogger(TickerDataRepositoryImpl.class);
 
     @Autowired
-    public TickerDataRepositoryImpl(ElasticsearchTemplate elasticsearchTemplate) {
+    public TickerDataRepositoryImpl(ElasticsearchTemplate elasticsearchTemplate,JestClient jestClient) {
         this.elasticsearchTemplate = elasticsearchTemplate;
+        this.jestClient = jestClient;
     }
 
     private ElasticsearchTemplate elasticsearchTemplate;
 
+
+    private JestClient jestClient;
 
     @Override
     public List<TickerData> getTickerDataByPeriod(long numberOfDays) {
@@ -236,7 +240,8 @@ public class TickerDataRepositoryImpl implements TickerDataRepositoryCustom {
 
         }
 
-       return movingAverageModels;
+
+        return movingAverageModels;
     }
 
     /**
